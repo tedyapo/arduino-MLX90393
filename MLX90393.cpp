@@ -17,25 +17,33 @@ MLX90393()
   tcmp_en = 0;
   tcmp_en_dirty = 1;
 
-  // gain steps are exp(log(5)/7)
-  gain_step = 1.25849895064183;
+  // gain steps are exp(log(5)/7), i.e. 7 steps for 5x
+  gain_multipliers[0] = 1.25849895064183f;
+  gain_multipliers[1] = 1.58381960876658f;
+  gain_multipliers[2] = 1.99323531563869f;
+  gain_multipliers[3] = 2.50848455311352f;
+  gain_multipliers[4] = 3.15692517779460f;
+  gain_multipliers[5] = 3.97298702350926f;
+  gain_multipliers[6] = 5.f;
+ 
   // from datasheet
   base_xy_sens = 0.161;
   base_z_sens = 0.294;
 }
 
-void
+uint8_t
 MLX90393::
 begin(uint8_t A1, uint8_t A0)
 {
   I2C_address = I2C_BASE_ADDR | (A1?2:0) | (A0?1:0);
   Wire.begin();
-  reset();
-  setGainSel(7);
-  setResolution(0, 0, 0);
-  setOverSampling(3);
-  setDigitalFiltering(7);
-  setTemperatureCompensation(0);
+  uint8_t status1 = checkStatus(reset());
+  uint8_t status2 = setGainSel(7);
+  uint8_t status3 = setResolution(0, 0, 0);
+  uint8_t status4 = setOverSampling(3);
+  uint8_t status5 = setDigitalFiltering(7);
+  uint8_t status6 = setTemperatureCompensation(0);
+  return status1 | status2 | status3 | status4 | status5 | status6;
 }
 
 void
@@ -116,11 +124,13 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
   Wire.endTransmission();
 
   uint8_t buffer[9];
-  uint8_t count = ( ((zyxt_flags & Z_FLAG)?1:0) + ((zyxt_flags & Y_FLAG)?1:0) + 
-                 ((zyxt_flags & X_FLAG)?1:0) + ((zyxt_flags & T_FLAG)?1:0) );
+  uint8_t count = 1 + (((zyxt_flags & Z_FLAG)?2:0) +
+                       ((zyxt_flags & Y_FLAG)?2:0) + 
+                       ((zyxt_flags & X_FLAG)?2:0) +
+                       ((zyxt_flags & T_FLAG)?2:0) );
   
-  Wire.requestFrom(I2C_address, uint8_t(2*count+1));
-  for (uint8_t i=0; i < 2*count+1; i++){
+  Wire.requestFrom(I2C_address, count);
+  for (uint8_t i=0; i < count; i++){
     if (Wire.available()){
       buffer[i] = Wire.read();
     } else {
@@ -243,7 +253,77 @@ convertRaw(MLX90393::txyzRaw raw)
 {
   txyz data;
 
-  // refresh cached values if dirty
+  float gain_factor = gain_multipliers[7 - (gain_sel & 0x7)];
+
+  if (tcmp_en){
+    data.x = ( (raw.x - 32768.f) * base_xy_sens *
+               gain_factor * (1 << res_x) );
+  } else {
+    switch(res_x){
+    case 0:
+    case 1:
+      data.x = int16_t(raw.x) * base_xy_sens * gain_factor * (1 << res_x);
+      break;
+    case 2:
+      data.x = ( (raw.x - 32768.f) * base_xy_sens *
+                 gain_factor * (1 << res_x) );
+      break;
+    case 3:
+      data.x = ( (raw.x - 16384.f) * base_xy_sens *
+                 gain_factor * (1 << res_x) );
+      break;
+    }
+  }
+
+  if (tcmp_en){
+    data.y = ( (raw.y - 32768.f) * base_xy_sens *
+               gain_factor * (1 << res_y) );
+  } else {
+    switch(res_y){
+    case 0:
+    case 1:
+      data.y = int16_t(raw.y) * base_xy_sens * gain_factor * (1 << res_y);
+      break;
+    case 2:
+      data.y = ( (raw.y - 32768.f) * base_xy_sens * 
+                 gain_factor * (1 << res_y) );
+      break;
+    case 3:
+      data.y = ( (raw.y - 16384.f) * base_xy_sens *
+                 gain_factor * (1 << res_y) );
+      break;
+    }
+  }
+
+  if (tcmp_en){
+    data.z = ( (raw.z - 32768.f) * base_z_sens *
+               gain_factor * (1 << res_z) );
+  } else {
+    switch(res_z){
+    case 0:
+    case 1:
+      data.z = int16_t(raw.z) * base_z_sens * gain_factor * (1 << res_z);
+      break;
+    case 2:
+      data.z = ( (raw.z - 32768.f) * base_z_sens *
+                 gain_factor * (1 << res_z) );
+      break;
+    case 3:
+      data.z = ( (raw.z - 16384.f) * base_z_sens * 
+                 gain_factor * (1 << res_z) );
+      break;
+    }
+  }
+
+  data.t = 25 + (raw.t - 46244.f)/45.2f;
+  return data;
+}
+
+uint8_t
+MLX90393::
+readData(MLX90393::txyz& data)
+{
+  // refresh cached values if dirty - used for scaling after read
   if (gain_sel_dirty){
     uint8_t gs;
     getGainSel(gs);
@@ -257,76 +337,13 @@ convertRaw(MLX90393::txyzRaw raw)
     getTemperatureCompensation(en);
   }
 
-  // NB: this could be cached instead of calling pow() every time
-  // or the 8 values stored instead of pow() at all 
-  float gain_factor = pow(gain_step, 7-gain_sel);
-
-  if (tcmp_en){
-    data.x = (raw.x - 32768) * base_xy_sens * gain_factor * (1 << res_x);
-  } else {
-    switch(res_x){
-    case 0:
-    case 1:
-      data.x = raw.x * base_xy_sens * gain_factor * (1 << res_x);
-      break;
-    case 2:
-      data.x = (raw.x - 32768) * base_xy_sens * gain_factor * (1 << res_x);
-      break;
-    case 3:
-      data.x = (raw.x - 16384) * base_xy_sens * gain_factor * (1 << res_x);
-      break;
-    }
-  }
-
-  if (tcmp_en){
-    data.y = (raw.y - 32768) * base_xy_sens * gain_factor * (1 << res_y);
-  } else {
-    switch(res_y){
-    case 0:
-    case 1:
-      data.y = raw.y * base_xy_sens * gain_factor * (1 << res_y);
-      break;
-    case 2:
-      data.y = (raw.y - 32768) * base_xy_sens * gain_factor * (1 << res_y);
-      break;
-    case 3:
-      data.y = (raw.y - 16384) * base_xy_sens * gain_factor * (1 << res_y);
-      break;
-    }
-  }
-
-  if (tcmp_en){
-    data.z = (raw.z - 32768) * base_z_sens * gain_factor * (1 << res_z);
-  } else {
-    switch(res_z){
-    case 0:
-    case 1:
-      data.z = raw.z * base_z_sens * gain_factor * (1 << res_z);
-      break;
-    case 2:
-      data.z = (raw.z - 32768) * base_z_sens * gain_factor * (1 << res_z);
-      break;
-    case 3:
-      data.z = (raw.z - 16384) * base_z_sens * gain_factor * (1 << res_z);
-      break;
-    }
-  }
-
-  data.t = 25 + (raw.t - 46244)/45.2;
-  return data;
-}
-
-MLX90393::txyz
-MLX90393::
-readField()
-{
-  startMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG);
+  uint8_t status1 = startMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG);
   delay(1000);
   txyzRaw raw_txyz;
-  readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);
-  txyz data = convertRaw(raw_txyz);
-
-  return data;
+  uint8_t status2 = 
+    readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);
+  data = convertRaw(raw_txyz);
+  return checkStatus(status1) | checkStatus(status2);
 }
 
 uint8_t
@@ -336,9 +353,9 @@ setGainSel(uint8_t gain_sel)
   uint16_t old_val;
   uint8_t status1 = readRegister(GAIN_SEL_REG, old_val);
   uint8_t status2 = writeRegister(GAIN_SEL_REG, 
-                               (old_val & ~GAIN_SEL_MASK) | 
-                               ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
-                                GAIN_SEL_MASK));
+                                  (old_val & ~GAIN_SEL_MASK) | 
+                                  ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
+                                   GAIN_SEL_MASK));
   this->gain_sel = ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
                     GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
   gain_sel_dirty = 0;
@@ -363,8 +380,8 @@ setOverSampling(uint8_t osr)
   uint16_t old_val;
   uint8_t status1 = readRegister(OSR_REG, old_val);
   uint8_t status2 = writeRegister(OSR_REG, 
-                               (old_val & ~OSR_MASK) | 
-                               ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK));
+                                  (old_val & ~OSR_MASK) | 
+                                  ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK));
   this->osr = ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK) >> OSR_SHIFT;
   osr_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
@@ -388,9 +405,9 @@ setDigitalFiltering(uint8_t dig_flt)
   uint16_t old_val;
   uint8_t status1 = readRegister(DIG_FLT_REG, old_val);
   uint8_t status2 = writeRegister(DIG_FLT_REG, 
-                               (old_val & ~DIG_FLT_MASK) | 
-                               ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
-                                DIG_FLT_MASK));
+                                  (old_val & ~DIG_FLT_MASK) | 
+                                  ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
+                                   DIG_FLT_MASK));
   this->dig_flt = ((uint16_t(dig_flt) << DIG_FLT_SHIFT) & 
                    DIG_FLT_MASK) >> DIG_FLT_SHIFT;
   dig_flt_dirty = 0;
@@ -412,13 +429,12 @@ uint8_t
 MLX90393::
 setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z)
 {
-  uint8_t res_xyz = ((res_x & 0x3)<<4) | ((res_y & 0x3)<<2) | (res_z & 0x3);
+  uint16_t res_xyz = ((res_z & 0x3)<<4) | ((res_y & 0x3)<<2) | (res_x & 0x3);
   uint16_t old_val;
   uint8_t status1 = readRegister(RES_XYZ_REG, old_val);
   uint8_t status2 = writeRegister(RES_XYZ_REG, 
-                               (old_val & RES_XYZ_MASK) | 
-                               ((uint16_t(res_xyz) << RES_XYZ_SHIFT) &
-                                RES_XYZ_MASK));
+                                  (old_val & ~RES_XYZ_MASK) | 
+                                  (res_xyz << RES_XYZ_SHIFT) & RES_XYZ_MASK);
   this->res_x = res_x & 0x3;
   this->res_y = res_y & 0x3;
   this->res_z = res_z & 0x3;
@@ -433,9 +449,9 @@ getResolution(uint8_t& res_x, uint8_t& res_y, uint8_t& res_z)
   uint16_t reg_val;
   uint8_t status = readRegister(RES_XYZ_REG, reg_val);
   uint8_t res_xyz = (reg_val & RES_XYZ_MASK) >> RES_XYZ_SHIFT;
-  this->res_x = res_x = (res_xyz >> 4) & 0x3;
+  this->res_x = res_x = (res_xyz >> 0) & 0x3;
   this->res_y = res_y = (res_xyz >> 2) & 0x3;
-  this->res_z = res_z = (res_xyz >> 0) & 0x3;
+  this->res_z = res_z = (res_xyz >> 4) & 0x3;
   res_xyz_dirty = 0;
   return checkStatus(status);
 }
@@ -448,9 +464,9 @@ setTemperatureCompensation(uint8_t enabled)
   uint16_t old_val;
   uint8_t status1 = readRegister(TCMP_EN_REG, old_val);
   uint8_t status2 = writeRegister(TCMP_EN_REG, 
-                               (old_val & ~TCMP_EN_MASK) | 
-                               ((uint16_t(tcmp_en) << TCMP_EN_SHIFT) &
-                                TCMP_EN_MASK));
+                                  (old_val & ~TCMP_EN_MASK) | 
+                                  ((uint16_t(tcmp_en) << TCMP_EN_SHIFT) &
+                                   TCMP_EN_MASK));
   this->tcmp_en = tcmp_en;
   tcmp_en_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
@@ -475,4 +491,29 @@ setOffsets(uint16_t x, uint16_t y, uint16_t z)
   uint8_t status2 = writeRegister(Y_OFFSET_REG, y);
   uint8_t status3 = writeRegister(Z_OFFSET_REG, z);
   return checkStatus(status1) | checkStatus(status2) | checkStatus(status3);
+}
+
+uint8_t
+MLX90393::
+setWOXYThreshold(uint16_t woxy_thresh)
+{
+  uint8_t status = writeRegister(WOXY_THRESHOLD_REG, woxy_thresh);
+  return checkStatus(status);
+}
+
+uint8_t
+MLX90393::
+setWOZThreshold(uint16_t woz_thresh)
+{
+  uint8_t status = writeRegister(WOZ_THRESHOLD_REG, woz_thresh);
+  return checkStatus(status);
+}
+
+
+uint8_t
+MLX90393::
+setWOTThreshold(uint16_t wot_thresh)
+{
+  uint8_t status = writeRegister(WOT_THRESHOLD_REG, wot_thresh);
+  return checkStatus(status);
 }

@@ -5,14 +5,13 @@
 MLX90393 mlx;
 
 void setup(){
-  mlx.begin();
-  mlx.setGainSel(7);
-  mlx.setResolution(0, 0, 0);
+  uint8_t status = mlx.begin();
   Serial.begin(9600);
 }
 
 void loop(){
-  MLX90393::txyz data = mlx.readField();
+  MLX90393::txyz data;
+  mlx.readData(data);
   Serial.print(data.x);
   Serial.print(" ");
   Serial.print(data.y);
