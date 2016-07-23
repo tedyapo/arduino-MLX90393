@@ -5,7 +5,8 @@
 MLX90393 mlx;
 
 void setup(){
-  uint8_t status = mlx.begin();
+  // DRDY line connected to A3 (omit third parameter to used timed reads)
+  uint8_t status = mlx.begin(0, 0, A3);
   Serial.begin(9600);
 }
 
@@ -19,5 +20,5 @@ void loop(){
   Serial.print(data.z);
   Serial.print(" ");
   Serial.println(data.t);
-  delay(1000);
+  //delay(1000);
 }
