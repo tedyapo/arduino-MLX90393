@@ -25,8 +25,6 @@ public:
     uint16_t z;
   };
   MLX90393();
-
-  uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0);
   
   // raw device commands
   uint8_t exit(uint8_t address);
@@ -42,11 +40,14 @@ public:
   uint8_t nop();
 
   // higher-level API
+  uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1);
   uint8_t readData(txyz& data);
   uint8_t setGainSel(uint8_t gain_sel);
   uint8_t getGainSel(uint8_t& gain_sel);
   uint8_t setOverSampling(uint8_t osr);
   uint8_t getOverSampling(uint8_t& osr);
+  uint8_t setTemperatureOverSampling(uint8_t osr2);
+  uint8_t getTemperatureOverSampling(uint8_t& osr2);
   uint8_t setDigitalFiltering(uint8_t dig_flt);
   uint8_t getDigitalFiltering(uint8_t& dig_flt);
   uint8_t setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z);
@@ -62,6 +63,7 @@ private:
   enum { I2C_BASE_ADDR = 0x0c };
   enum { GAIN_SEL_REG = 0x0, GAIN_SEL_MASK = 0x0070, GAIN_SEL_SHIFT = 4 };
   enum { OSR_REG = 0x2, OSR_MASK = 0x0003, OSR_SHIFT = 0 };
+  enum { OSR2_REG = 0x2, OSR2_MASK = 0x0180, OSR2_SHIFT = 11 };
   enum { DIG_FLT_REG = 0x2, DIG_FLT_MASK = 0x001c, DIG_FLT_SHIFT = 2 };
   enum { RES_XYZ_REG = 0x2, RES_XYZ_MASK = 0x07e0, RES_XYZ_SHIFT = 5 };
   enum { TCMP_EN_REG = 0x1, TCMP_EN_MASK = 0x0400, TCMP_EN_SHIFT = 10 };
@@ -87,6 +89,7 @@ private:
 
   // parameters are cached to avoid reading them from sensor unnecessarily
   uint8_t I2C_address;
+  int DRDY_pin;
   uint8_t gain_sel;
   uint8_t gain_sel_dirty;
   uint8_t res_x;
@@ -95,6 +98,8 @@ private:
   uint8_t res_xyz_dirty;
   uint8_t osr;
   uint8_t osr_dirty;
+  uint8_t osr2;
+  uint8_t osr2_dirty;
   uint8_t dig_flt;
   uint8_t dig_flt_dirty;
   uint8_t tcmp_en;

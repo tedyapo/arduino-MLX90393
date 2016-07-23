@@ -12,6 +12,8 @@ MLX90393()
   res_xyz_dirty = 1;
   osr = 0;
   osr_dirty = 1;
+  osr2 = 0;
+  osr2_dirty = 1;
   dig_flt = 0;
   dig_flt_dirty = 1;
   tcmp_en = 0;
@@ -33,9 +35,13 @@ MLX90393()
 
 uint8_t
 MLX90393::
-begin(uint8_t A1, uint8_t A0)
+begin(uint8_t A1, uint8_t A0, int DRDY_pin)
 {
   I2C_address = I2C_BASE_ADDR | (A1?2:0) | (A0?1:0);
+  this->DRDY_pin = DRDY_pin;
+  if (DRDY_pin >= 0){
+    pinMode(DRDY_pin, INPUT);
+  }
   Wire.begin();
   uint8_t status1 = checkStatus(reset());
   uint8_t status2 = setGainSel(7);
@@ -53,6 +59,7 @@ invalidateCache()
   gain_sel_dirty = 1;
   res_xyz_dirty = 1;
   osr_dirty = 1;
+  osr2_dirty = 1;
   dig_flt_dirty = 1;
   tcmp_en_dirty = 1; 
 }
@@ -336,9 +343,31 @@ readData(MLX90393::txyz& data)
     uint8_t en;
     getTemperatureCompensation(en);
   }
+  if (DRDY_pin < 0){
+    if (osr_dirty){
+      uint8_t osr;
+      getOverSampling(osr);
+    }
+    if (osr2_dirty){
+      uint8_t osr2;
+      getOverSampling(osr2);
+    }
+  }
 
   uint8_t status1 = startMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG);
-  delay(1000);
+
+  // wait for DRDY signal if connected, otherwise delay appropriately
+  if (DRDY_pin >= 0){
+    while(!digitalRead(DRDY_pin)){
+      // busy wait
+    }
+  } else {
+    // estimate conversion time from datasheet equations
+    float Tconv = ( 3 * (2 + (1 << dig_flt)) * (1 << osr) *0.064f +
+                    (1 << osr2) * 0.192f );
+    // add 30% tolerance
+    delay(Tconv * 1.3f);
+  }
   txyzRaw raw_txyz;
   uint8_t status2 = 
     readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);
@@ -395,6 +424,31 @@ getOverSampling(uint8_t& osr)
   uint8_t status = readRegister(OSR_REG, reg_val);
   this->osr = osr = (reg_val & OSR_MASK) >> OSR_SHIFT;
   osr_dirty = 0;
+  return checkStatus(status);
+}
+
+uint8_t
+MLX90393::
+setTemperatureOverSampling(uint8_t osr2)
+{
+  uint16_t old_val;
+  uint8_t status1 = readRegister(OSR2_REG, old_val);
+  uint8_t status2 = writeRegister(OSR2_REG, 
+                                  (old_val & ~OSR2_MASK) | 
+                                  ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK));
+  this->osr2 = ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK) >> OSR2_SHIFT;
+  osr2_dirty = 0;
+  return checkStatus(status1) | checkStatus(status2);
+}
+
+uint8_t
+MLX90393::
+getTemperatureOverSampling(uint8_t& osr2)
+{
+  uint16_t reg_val;
+  uint8_t status = readRegister(OSR2_REG, reg_val);
+  this->osr2 = osr2 = (reg_val & OSR2_MASK) >> OSR2_SHIFT;
+  osr2_dirty = 0;
   return checkStatus(status);
 }
 
