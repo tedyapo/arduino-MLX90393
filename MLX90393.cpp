@@ -358,6 +358,7 @@ readData(MLX90393::txyz& data)
 
   // wait for DRDY signal if connected, otherwise delay appropriately
   if (DRDY_pin >= 0){
+    delayMicroseconds(600);
     while(!digitalRead(DRDY_pin)){
       // busy wait
     }
