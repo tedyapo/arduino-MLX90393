@@ -1,3 +1,11 @@
+//
+// MLX90393.cpp : arduino driver for MLX90393 magnetometer
+//
+// Copyright 2016 Theodore C. Yapo
+//
+// released under MIT License (see file)
+//
+
 #ifndef MLX90393_H_INCLUDED
 #define MLX90393_H_INCLUDED
 

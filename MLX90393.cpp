@@ -1,3 +1,11 @@
+//
+// MLX90393.cpp : arduino driver for MLX90393 magnetometer
+//
+// Copyright 2016 Theodore C. Yapo
+//
+// released under MIT License (see file)
+//
+
 #include <MLX90393.h>
 
 MLX90393::
@@ -80,14 +88,16 @@ MLX90393::
 sendCommand(uint8_t cmd)
 {
   Wire.beginTransmission(I2C_address);
-  Wire.write(cmd);
-  Wire.endTransmission();
-  Wire.requestFrom(I2C_address, uint8_t(1));
-  if (Wire.available()){
-    return Wire.read();
-  } else {
+  if (Wire.write(cmd) != 1){
     return STATUS_ERROR;
   }
+  if (Wire.endTransmission()){
+    return STATUS_ERROR;
+  }
+  if (Wire.requestFrom(I2C_address, uint8_t(1)) != 1){
+    return STATUS_ERROR;
+  }
+  return Wire.read();
 }
 
 uint8_t
@@ -127,8 +137,12 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
 {
   uint8_t cmd = CMD_READ_MEASUREMENT | (zyxt_flags & 0xf);
   Wire.beginTransmission(I2C_address);
-  Wire.write(cmd);
-  Wire.endTransmission();
+  if(Wire.write(cmd) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.endTransmission()){
+    return STATUS_ERROR;
+  }
 
   uint8_t buffer[9];
   uint8_t count = 1 + (((zyxt_flags & Z_FLAG)?2:0) +
@@ -136,7 +150,9 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
                        ((zyxt_flags & X_FLAG)?2:0) +
                        ((zyxt_flags & T_FLAG)?2:0) );
   
-  Wire.requestFrom(I2C_address, count);
+  if(Wire.requestFrom(I2C_address, count) != count){
+    return STATUS_ERROR;
+  }
   for (uint8_t i=0; i < count; i++){
     if (Wire.available()){
       buffer[i] = Wire.read();
@@ -178,13 +194,19 @@ uint8_t
 MLX90393::
 readRegister(uint8_t address, uint16_t& data)
 {
-  uint8_t cmd1 = CMD_READ_REGISTER;
-  uint8_t cmd2 = (address & 0x3f)<<2;
   Wire.beginTransmission(I2C_address);
-  Wire.write(cmd1);
-  Wire.write(cmd2);
-  Wire.endTransmission();
-  Wire.requestFrom(I2C_address, uint8_t(3));
+  if (Wire.write(CMD_READ_REGISTER) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.write((address & 0x3f)<<2) != 1){
+    return STATUS_ERROR;
+  }
+  if(Wire.endTransmission()){
+    return STATUS_ERROR;
+  }
+  if (Wire.requestFrom(I2C_address, uint8_t(3)) != 3){
+    return STATUS_ERROR;
+  }
   uint8_t status, b_h, b_l;
   if (Wire.available()){
     status = Wire.read();
@@ -210,17 +232,25 @@ MLX90393::
 writeRegister(uint8_t address, uint16_t data)
 {
   invalidateCache();
-  uint8_t cmd1 = CMD_WRITE_REGISTER;
-  uint8_t cmd2 = (data & 0xff00) >> 8;
-  uint8_t cmd3 = (data & 0x00ff);
-  uint8_t cmd4 = (address & 0x3f)<<2;
   Wire.beginTransmission(I2C_address);
-  Wire.write(cmd1);
-  Wire.write(cmd2);
-  Wire.write(cmd3);
-  Wire.write(cmd4);
-  Wire.endTransmission();
-  Wire.requestFrom(I2C_address, uint8_t(1));
+  if ( Wire.write(CMD_WRITE_REGISTER) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.write((data & 0xff00) >> 8) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.write(data & 0x00ff) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.write((address & 0x3f)<<2) != 1){
+    return STATUS_ERROR;
+  }
+  if (Wire.endTransmission()){
+    return STATUS_ERROR;
+  }
+  if (Wire.requestFrom(I2C_address, uint8_t(1)) != 1){
+    return STATUS_ERROR;
+  }
   if (Wire.available()){
     return Wire.read();
   } else {
