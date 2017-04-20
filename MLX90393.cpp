@@ -45,6 +45,7 @@ uint8_t
 MLX90393::
 begin(uint8_t A1, uint8_t A0, int DRDY_pin)
 {
+
   I2C_address = I2C_BASE_ADDR | (A1?2:0) | (A0?1:0);
   this->DRDY_pin = DRDY_pin;
   if (DRDY_pin >= 0){
@@ -57,6 +58,7 @@ begin(uint8_t A1, uint8_t A0, int DRDY_pin)
   uint8_t status4 = setOverSampling(3);
   uint8_t status5 = setDigitalFiltering(7);
   uint8_t status6 = setTemperatureCompensation(0);
+
   return status1 | status2 | status3 | status4 | status5 | status6;
 }
 
@@ -195,8 +197,9 @@ MLX90393::
 readRegister(uint8_t address, uint16_t& data)
 {
   Wire.beginTransmission(I2C_address);
+
   if (Wire.write(CMD_READ_REGISTER) != 1){
-    return STATUS_ERROR;
+	return STATUS_ERROR;
   }
   if (Wire.write((address & 0x3f)<<2) != 1){
     return STATUS_ERROR;
@@ -264,7 +267,10 @@ reset()
 {
   invalidateCache();
   uint8_t cmd = CMD_RESET;
-  return sendCommand(cmd);
+  
+  sendCommand(cmd); //Device now resets. We must give it time to complete
+  delay(2); //POR is 1.6ms max. Software reset time limit is not specified. 2ms was found to be good.
+  return STATUS_OK;
 }
 
 uint8_t
@@ -412,13 +418,17 @@ setGainSel(uint8_t gain_sel)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(GAIN_SEL_REG, old_val);
+  
   uint8_t status2 = writeRegister(GAIN_SEL_REG, 
                                   (old_val & ~GAIN_SEL_MASK) | 
                                   ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
                                    GAIN_SEL_MASK));
+
   this->gain_sel = ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
                     GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
+
   gain_sel_dirty = 0;
+
   return checkStatus(status1) | checkStatus(status2);
 }
 
