@@ -43,18 +43,15 @@ MLX90393()
 
 uint8_t
 MLX90393::
-begin(uint8_t A1, uint8_t A0, int DRDY_pin, TwoWire &wirePort)
+begin(uint8_t A1, uint8_t A0, int DRDY_pin)
 {
+
   I2C_address = I2C_BASE_ADDR | (A1?2:0) | (A0?1:0);
   this->DRDY_pin = DRDY_pin;
   if (DRDY_pin >= 0){
     pinMode(DRDY_pin, INPUT);
   }
-
-  _i2cPort = &wirePort; //Grab which port the user wants us to use
-
-  _i2cPort->begin();
-
+  Wire.begin();
   uint8_t status1 = checkStatus(reset());
   uint8_t status2 = setGainSel(7);
   uint8_t status3 = setResolution(0, 0, 0);
@@ -92,17 +89,17 @@ uint8_t
 MLX90393::
 sendCommand(uint8_t cmd)
 {
-  _i2cPort->beginTransmission(I2C_address);
-  if (_i2cPort->write(cmd) != 1){
+  Wire.beginTransmission(I2C_address);
+  if (Wire.write(cmd) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->endTransmission()){
+  if (Wire.endTransmission()){
     return STATUS_ERROR;
   }
-  if (_i2cPort->requestFrom(I2C_address, uint8_t(1)) != 1){
+  if (Wire.requestFrom(I2C_address, uint8_t(1)) != 1){
     return STATUS_ERROR;
   }
-  return _i2cPort->read();
+  return Wire.read();
 }
 
 uint8_t
@@ -141,11 +138,11 @@ MLX90393::
 readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
 {
   uint8_t cmd = CMD_READ_MEASUREMENT | (zyxt_flags & 0xf);
-  _i2cPort->beginTransmission(I2C_address);
-  if(_i2cPort->write(cmd) != 1){
+  Wire.beginTransmission(I2C_address);
+  if(Wire.write(cmd) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->endTransmission()){
+  if (Wire.endTransmission()){
     return STATUS_ERROR;
   }
 
@@ -155,12 +152,12 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
                        ((zyxt_flags & X_FLAG)?2:0) +
                        ((zyxt_flags & T_FLAG)?2:0) );
   
-  if(_i2cPort->requestFrom(I2C_address, count) != count){
+  if(Wire.requestFrom(I2C_address, count) != count){
     return STATUS_ERROR;
   }
   for (uint8_t i=0; i < count; i++){
-    if (_i2cPort->available()){
-      buffer[i] = _i2cPort->read();
+    if (Wire.available()){
+      buffer[i] = Wire.read();
     } else {
       return STATUS_ERROR;
     }
@@ -199,33 +196,33 @@ uint8_t
 MLX90393::
 readRegister(uint8_t address, uint16_t& data)
 {
-  _i2cPort->beginTransmission(I2C_address);
+  Wire.beginTransmission(I2C_address);
 
-  if (_i2cPort->write(CMD_READ_REGISTER) != 1){
+  if (Wire.write(CMD_READ_REGISTER) != 1){
 	return STATUS_ERROR;
   }
-  if (_i2cPort->write((address & 0x3f)<<2) != 1){
+  if (Wire.write((address & 0x3f)<<2) != 1){
     return STATUS_ERROR;
   }
-  if(_i2cPort->endTransmission()){
+  if(Wire.endTransmission()){
     return STATUS_ERROR;
   }
-  if (_i2cPort->requestFrom(I2C_address, uint8_t(3)) != 3){
+  if (Wire.requestFrom(I2C_address, uint8_t(3)) != 3){
     return STATUS_ERROR;
   }
   uint8_t status, b_h, b_l;
-  if (_i2cPort->available()){
-    status = _i2cPort->read();
+  if (Wire.available()){
+    status = Wire.read();
   } else {
     return STATUS_ERROR;
   }
-  if (_i2cPort->available()){
-    b_h = _i2cPort->read();
+  if (Wire.available()){
+    b_h = Wire.read();
   } else {
     return STATUS_ERROR;
   }
-  if (_i2cPort->available()){
-    b_l = _i2cPort->read();
+  if (Wire.available()){
+    b_l = Wire.read();
   } else {
     return STATUS_ERROR;
   }
@@ -238,27 +235,27 @@ MLX90393::
 writeRegister(uint8_t address, uint16_t data)
 {
   invalidateCache();
-  _i2cPort->beginTransmission(I2C_address);
-  if ( _i2cPort->write(CMD_WRITE_REGISTER) != 1){
+  Wire.beginTransmission(I2C_address);
+  if ( Wire.write(CMD_WRITE_REGISTER) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->write((data & 0xff00) >> 8) != 1){
+  if (Wire.write((data & 0xff00) >> 8) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->write(data & 0x00ff) != 1){
+  if (Wire.write(data & 0x00ff) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->write((address & 0x3f)<<2) != 1){
+  if (Wire.write((address & 0x3f)<<2) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->endTransmission()){
+  if (Wire.endTransmission()){
     return STATUS_ERROR;
   }
-  if (_i2cPort->requestFrom(I2C_address, uint8_t(1)) != 1){
+  if (Wire.requestFrom(I2C_address, uint8_t(1)) != 1){
     return STATUS_ERROR;
   }
-  if (_i2cPort->available()){
-    return _i2cPort->read();
+  if (Wire.available()){
+    return Wire.read();
   } else {
     return STATUS_ERROR;
   }
