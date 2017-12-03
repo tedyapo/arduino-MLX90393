@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include <MLX90393.h>
 
+// prints Bx By Bz (in uT) and temperature (C) to serial console
+
 MLX90393 mlx;
 
 void setup(){
