@@ -107,7 +107,14 @@ sendCommand(uint8_t cmd)
 
 uint8_t
 MLX90393::
-exit(uint8_t address)
+nop()
+{
+  return sendCommand(CMD_NOP);
+}
+
+uint8_t
+MLX90393::
+exit()
 {
   return sendCommand(CMD_EXIT);
 }
@@ -271,9 +278,12 @@ reset()
   invalidateCache();
   uint8_t cmd = CMD_RESET;
   
-  sendCommand(cmd); //Device now resets. We must give it time to complete
-  delay(2); //POR is 1.6ms max. Software reset time limit is not specified. 2ms was found to be good.
-  return STATUS_OK;
+  uint8_t status = sendCommand(cmd);
+  //Device now resets. We must give it time to complete
+  delay(2);
+  // POR is 1.6ms max. Software reset time limit is not specified.
+  // 2ms was found to be good.
+  return status;
 }
 
 uint8_t
