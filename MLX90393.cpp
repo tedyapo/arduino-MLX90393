@@ -528,7 +528,7 @@ getDigitalFiltering(uint8_t& dig_flt)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(DIG_FLT_REG, reg_val);
-  this->dig_flt = (reg_val & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
+  this->dig_flt = dig_flt = (reg_val & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
   dig_flt_dirty = 0;
   return checkStatus(status);
 }
