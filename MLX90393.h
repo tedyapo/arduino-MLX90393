@@ -21,7 +21,7 @@ public:
   enum { I2C_BASE_ADDR = 0x0c };
   enum { GAIN_SEL_REG = 0x0, GAIN_SEL_MASK = 0x0070, GAIN_SEL_SHIFT = 4 };
   enum { OSR_REG = 0x2, OSR_MASK = 0x0003, OSR_SHIFT = 0 };
-  enum { OSR2_REG = 0x2, OSR2_MASK = 0x0180, OSR2_SHIFT = 11 };
+  enum { OSR2_REG = 0x2, OSR2_MASK = 0x1800, OSR2_SHIFT = 11 };
   enum { DIG_FLT_REG = 0x2, DIG_FLT_MASK = 0x001c, DIG_FLT_SHIFT = 2 };
   enum { RES_XYZ_REG = 0x2, RES_XYZ_MASK = 0x07e0, RES_XYZ_SHIFT = 5 };
   enum { TCMP_EN_REG = 0x1, TCMP_EN_MASK = 0x0400, TCMP_EN_SHIFT = 10 };
