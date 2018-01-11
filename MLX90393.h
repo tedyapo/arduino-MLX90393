@@ -18,6 +18,33 @@ public:
   enum { STATUS_OK = 0, STATUS_ERROR = 0xff } return_status_t;
   enum { Z_FLAG = 0x8, Y_FLAG = 0x4, X_FLAG = 0x2, T_FLAG = 0x1 } axis_flag_t;
 
+  enum { I2C_BASE_ADDR = 0x0c };
+  enum { GAIN_SEL_REG = 0x0, GAIN_SEL_MASK = 0x0070, GAIN_SEL_SHIFT = 4 };
+  enum { OSR_REG = 0x2, OSR_MASK = 0x0003, OSR_SHIFT = 0 };
+  enum { OSR2_REG = 0x2, OSR2_MASK = 0x1800, OSR2_SHIFT = 11 };
+  enum { DIG_FLT_REG = 0x2, DIG_FLT_MASK = 0x001c, DIG_FLT_SHIFT = 2 };
+  enum { RES_XYZ_REG = 0x2, RES_XYZ_MASK = 0x07e0, RES_XYZ_SHIFT = 5 };
+  enum { TCMP_EN_REG = 0x1, TCMP_EN_MASK = 0x0400, TCMP_EN_SHIFT = 10 };
+  enum { X_OFFSET_REG = 4, Y_OFFSET_REG = 5, Z_OFFSET_REG = 6 };
+  enum { WOXY_THRESHOLD_REG = 7, WOZ_THRESHOLD_REG = 8, WOT_THRESHOLD_REG = 9 };
+  enum { BURST_MODE_BIT = 0x80, WAKE_ON_CHANGE_BIT = 0x40, 
+         POLLING_MODE_BIT = 0x20, ERROR_BIT = 0x10, EEC_BIT = 0x08,
+         RESET_BIT = 0x04, D1_BIT = 0x02, D0_BIT = 0x01 };
+
+  enum {
+    CMD_NOP = 0x00,
+    CMD_EXIT = 0x80,
+    CMD_START_BURST = 0x10,
+    CMD_WAKE_ON_CHANGE = 0x20,
+    CMD_START_MEASUREMENT = 0x30,
+    CMD_READ_MEASUREMENT = 0x40,
+    CMD_READ_REGISTER = 0x50,
+    CMD_WRITE_REGISTER = 0x60,
+    CMD_MEMORY_RECALL = 0xd0,
+    CMD_MEMORY_STORE = 0xe0,
+    CMD_RESET = 0xf0
+  };
+
   struct txyz
   {
     float t;
@@ -35,7 +62,7 @@ public:
   MLX90393();
   
   // raw device commands
-  uint8_t exit(uint8_t address);
+  uint8_t exit();
   uint8_t startBurst(uint8_t zyxt_flags);
   uint8_t startWakeOnChange(uint8_t zyxt_flags);
   uint8_t startMeasurement(uint8_t zyxt_flags);
@@ -46,6 +73,7 @@ public:
   uint8_t memoryRecall();
   uint8_t memoryStore();
   uint8_t nop();
+  uint8_t sendCommand(uint8_t cmd);
 
   // higher-level API
   uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
@@ -70,32 +98,6 @@ public:
   uint8_t setWOTThreshold(uint16_t wot_thresh);
 
 private:
-  enum { I2C_BASE_ADDR = 0x0c };
-  enum { GAIN_SEL_REG = 0x0, GAIN_SEL_MASK = 0x0070, GAIN_SEL_SHIFT = 4 };
-  enum { OSR_REG = 0x2, OSR_MASK = 0x0003, OSR_SHIFT = 0 };
-  enum { OSR2_REG = 0x2, OSR2_MASK = 0x0180, OSR2_SHIFT = 11 };
-  enum { DIG_FLT_REG = 0x2, DIG_FLT_MASK = 0x001c, DIG_FLT_SHIFT = 2 };
-  enum { RES_XYZ_REG = 0x2, RES_XYZ_MASK = 0x07e0, RES_XYZ_SHIFT = 5 };
-  enum { TCMP_EN_REG = 0x1, TCMP_EN_MASK = 0x0400, TCMP_EN_SHIFT = 10 };
-  enum { X_OFFSET_REG = 4, Y_OFFSET_REG = 5, Z_OFFSET_REG = 6 };
-  enum { WOXY_THRESHOLD_REG = 7, WOZ_THRESHOLD_REG = 8, WOT_THRESHOLD_REG = 9 };
-  enum { BURST_MODE_BIT = 0x80, WAKE_ON_CHANGE_BIT = 0x40, 
-         POLLING_MODE_BIT = 0x20, ERROR_BIT = 0x10, EEC_BIT = 0x08,
-         RESET_BIT = 0x04, D1_BIT = 0x02, D0_BIT = 0x01 };
-
-  enum {
-    CMD_NOP = 0x00,
-    CMD_EXIT = 0x80,
-    CMD_START_BURST = 0x10,
-    CMD_WAKE_ON_CHANGE = 0x20,
-    CMD_START_MEASUREMENT = 0x30,
-    CMD_READ_MEASUREMENT = 0x40,
-    CMD_READ_REGISTER = 0x50,
-    CMD_WRITE_REGISTER = 0x60,
-    CMD_MEMORY_RECALL = 0xd0,
-    CMD_MEMORY_STORE = 0xe0,
-    CMD_RESET = 0xf0
-  };
 
   // parameters are cached to avoid reading them from sensor unnecessarily
   uint8_t I2C_address;
@@ -119,7 +121,6 @@ private:
   float base_xy_sens;
   float base_z_sens;
 
-  uint8_t sendCommand(uint8_t cmd);
   void invalidateCache();
   uint8_t checkStatus(uint8_t status);
   txyz convertRaw(txyzRaw raw);
