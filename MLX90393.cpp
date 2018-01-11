@@ -30,13 +30,13 @@ MLX90393()
   tcmp_en_dirty = 1;
 
   // gain steps derived from datasheet section 15.1.4 tables
-  gain_multipliers[0] = 4.975f;
-  gain_multipliers[1] = 3.98f;
-  gain_multipliers[2] = 2.9925f;
-  gain_multipliers[3] = 2.4938f;
-  gain_multipliers[4] = 1.995f;
-  gain_multipliers[5] = 1.6625f;
-  gain_multipliers[6] = 1.33f;
+  gain_multipliers[0] = 5.f;
+  gain_multipliers[1] = 4.f;
+  gain_multipliers[2] = 3.f;
+  gain_multipliers[3] = 2.5f;
+  gain_multipliers[4] = 2.f;
+  gain_multipliers[5] = 1.66666667f;
+  gain_multipliers[6] = 1.33333333f;
   gain_multipliers[7] = 1.f;
 
   // from datasheet
