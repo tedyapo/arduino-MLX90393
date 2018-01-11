@@ -648,6 +648,10 @@ getTemperatureCompensation(uint8_t& enabled)
   return checkStatus(status);
 }
 
+//
+// Note: offsets are relative to 0x8000
+//  the default value of 0 in these registers will give poor results
+//
 uint8_t
 MLX90393::
 setOffsets(uint16_t x, uint16_t y, uint16_t z)
