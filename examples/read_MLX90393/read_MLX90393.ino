@@ -2,12 +2,13 @@
 #include <Arduino.h>
 #include <MLX90393.h>
 
-// prints Bx By Bz (in uT) and temperature (C) to serial console
+// prints Bx By Bz (in uT) and temperature (C) to serial console after receiving a character
 
 MLX90393 mlx;
 
 void setup(){
   // DRDY line connected to A3 (omit third parameter to used timed reads)
+  //uint8_t status = mlx.begin(0, 0, A3);
   uint8_t status = mlx.begin(0, 0);
   Serial.begin(9600);
 }

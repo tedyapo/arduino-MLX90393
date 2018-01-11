@@ -14,6 +14,8 @@ MLX90393()
   I2C_address = 0;
   gain_sel = 0;
   gain_sel_dirty = 1;
+  hallconf = 0;
+  hallconf_dirty = 1;
   res_x = 0;
   res_y = 0;
   res_z = 0;
@@ -27,19 +29,23 @@ MLX90393()
   tcmp_en = 0;
   tcmp_en_dirty = 1;
 
-  // gain steps are exp(log(5)/7), i.e. 7 steps for 5x
-  gain_multipliers[0] = 5.f;
-  gain_multipliers[1] = 3.97298702350926f;
-  gain_multipliers[2] = 3.15692517779460f;
-  gain_multipliers[3] = 2.50848455311352f;
-  gain_multipliers[4] = 1.99323531563869f;
-  gain_multipliers[5] = 1.58381960876658f;
-  gain_multipliers[6] = 1.25849895064183f;
+  // gain steps derived from datasheet section 15.1.4 tables
+  gain_multipliers[0] = 4.975f;
+  gain_multipliers[1] = 3.98f;
+  gain_multipliers[2] = 2.9925f;
+  gain_multipliers[3] = 2.4938f;
+  gain_multipliers[4] = 1.995f;
+  gain_multipliers[5] = 1.6625f;
+  gain_multipliers[6] = 1.33f;
   gain_multipliers[7] = 1.f;
 
   // from datasheet
-  base_xy_sens = 0.161;
-  base_z_sens = 0.294;
+  // for hallconf = 0
+  base_xy_sens_hc0 = 0.196f;
+  base_z_sens_hc0 = 0.316f;
+  // for hallconf = 0xc
+  base_xy_sens_hc0xc = 0.150f;
+  base_z_sens_hc0xc = 0.242f;
 }
 
 uint8_t
@@ -71,6 +77,7 @@ MLX90393::
 invalidateCache()
 {
   gain_sel_dirty = 1;
+  hallconf_dirty = 1;
   res_xyz_dirty = 1;
   osr_dirty = 1;
   osr2_dirty = 1;
@@ -309,64 +316,78 @@ MLX90393::
 convertRaw(MLX90393::txyzRaw raw)
 {
   txyz data;
+  float xy_sens;
+  float z_sens;
+
+  switch(hallconf){
+  default:
+  case 0:
+    xy_sens = base_xy_sens_hc0;
+    z_sens = base_z_sens_hc0;
+    break;
+  case 0xc:
+    xy_sens = base_xy_sens_hc0xc;
+    z_sens = base_z_sens_hc0xc;
+    break;
+  }   
 
   float gain_factor = gain_multipliers[gain_sel & 0x7];
 
   if (tcmp_en){
-    data.x = ( (raw.x - 32768.f) * base_xy_sens *
+    data.x = ( (raw.x - 32768.f) * xy_sens *
                gain_factor * (1 << res_x) );
   } else {
     switch(res_x){
     case 0:
     case 1:
-      data.x = int16_t(raw.x) * base_xy_sens * gain_factor * (1 << res_x);
+      data.x = int16_t(raw.x) * xy_sens * gain_factor * (1 << res_x);
       break;
     case 2:
-      data.x = ( (raw.x - 32768.f) * base_xy_sens *
+      data.x = ( (raw.x - 32768.f) * xy_sens *
                  gain_factor * (1 << res_x) );
       break;
     case 3:
-      data.x = ( (raw.x - 16384.f) * base_xy_sens *
+      data.x = ( (raw.x - 16384.f) * xy_sens *
                  gain_factor * (1 << res_x) );
       break;
     }
   }
 
   if (tcmp_en){
-    data.y = ( (raw.y - 32768.f) * base_xy_sens *
+    data.y = ( (raw.y - 32768.f) * xy_sens *
                gain_factor * (1 << res_y) );
   } else {
     switch(res_y){
     case 0:
     case 1:
-      data.y = int16_t(raw.y) * base_xy_sens * gain_factor * (1 << res_y);
+      data.y = int16_t(raw.y) * xy_sens * gain_factor * (1 << res_y);
       break;
     case 2:
-      data.y = ( (raw.y - 32768.f) * base_xy_sens *
+      data.y = ( (raw.y - 32768.f) * xy_sens *
                  gain_factor * (1 << res_y) );
       break;
     case 3:
-      data.y = ( (raw.y - 16384.f) * base_xy_sens *
+      data.y = ( (raw.y - 16384.f) * xy_sens *
                  gain_factor * (1 << res_y) );
       break;
     }
   }
 
   if (tcmp_en){
-    data.z = ( (raw.z - 32768.f) * base_z_sens *
+    data.z = ( (raw.z - 32768.f) * z_sens *
                gain_factor * (1 << res_z) );
   } else {
     switch(res_z){
     case 0:
     case 1:
-      data.z = int16_t(raw.z) * base_z_sens * gain_factor * (1 << res_z);
+      data.z = int16_t(raw.z) * z_sens * gain_factor * (1 << res_z);
       break;
     case 2:
-      data.z = ( (raw.z - 32768.f) * base_z_sens *
+      data.z = ( (raw.z - 32768.f) * z_sens *
                  gain_factor * (1 << res_z) );
       break;
     case 3:
-      data.z = ( (raw.z - 16384.f) * base_z_sens *
+      data.z = ( (raw.z - 16384.f) * z_sens *
                  gain_factor * (1 << res_z) );
       break;
     }
@@ -384,6 +405,10 @@ readData(MLX90393::txyz& data)
   if (gain_sel_dirty){
     uint8_t gs;
     getGainSel(gs);
+  }
+  if (hallconf_dirty){
+    uint8_t hc;
+    getHallConf(hc);
   }
   if (res_xyz_dirty){
     uint8_t rx, ry, rz;
@@ -454,6 +479,37 @@ getGainSel(uint8_t& gain_sel)
   uint8_t status = readRegister(GAIN_SEL_REG, reg_val);
   this->gain_sel = gain_sel = (reg_val & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
   gain_sel_dirty = 0;
+  return checkStatus(status);
+}
+
+uint8_t
+MLX90393::
+setHallConf(uint8_t hallconf)
+{
+  uint16_t old_val;
+  uint8_t status1 = readRegister(HALLCONF_REG, old_val);
+
+  uint8_t status2 = writeRegister(HALLCONF_REG,
+                                  (old_val & ~HALLCONF_MASK) |
+                                  ((uint16_t(hallconf) << HALLCONF_SHIFT) &
+                                   HALLCONF_MASK));
+
+  this->hallconf = ((uint16_t(hallconf) << HALLCONF_SHIFT) &
+                    HALLCONF_MASK) >> HALLCONF_SHIFT;
+
+  hallconf_dirty = 0;
+
+  return checkStatus(status1) | checkStatus(status2);
+}
+
+uint8_t
+MLX90393::
+getHallConf(uint8_t& hallconf)
+{
+  uint16_t reg_val;
+  uint8_t status = readRegister(HALLCONF_REG, reg_val);
+  this->hallconf = hallconf = (reg_val & HALLCONF_MASK) >> HALLCONF_SHIFT;
+  hallconf_dirty = 0;
   return checkStatus(status);
 }
 
