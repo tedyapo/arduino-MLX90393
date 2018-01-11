@@ -28,14 +28,15 @@ MLX90393()
   tcmp_en_dirty = 1;
 
   // gain steps are exp(log(5)/7), i.e. 7 steps for 5x
-  gain_multipliers[0] = 1.25849895064183f;
-  gain_multipliers[1] = 1.58381960876658f;
-  gain_multipliers[2] = 1.99323531563869f;
+  gain_multipliers[0] = 5.f;
+  gain_multipliers[1] = 3.97298702350926f;
+  gain_multipliers[2] = 3.15692517779460f;
   gain_multipliers[3] = 2.50848455311352f;
-  gain_multipliers[4] = 3.15692517779460f;
-  gain_multipliers[5] = 3.97298702350926f;
-  gain_multipliers[6] = 5.f;
- 
+  gain_multipliers[4] = 1.99323531563869f;
+  gain_multipliers[5] = 1.58381960876658f;
+  gain_multipliers[6] = 1.25849895064183f;
+  gain_multipliers[7] = 1.f;
+
   // from datasheet
   base_xy_sens = 0.161;
   base_z_sens = 0.294;
@@ -74,7 +75,7 @@ invalidateCache()
   osr_dirty = 1;
   osr2_dirty = 1;
   dig_flt_dirty = 1;
-  tcmp_en_dirty = 1; 
+  tcmp_en_dirty = 1;
 }
 
 uint8_t
@@ -158,10 +159,10 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
 
   uint8_t buffer[9];
   uint8_t count = 1 + (((zyxt_flags & Z_FLAG)?2:0) +
-                       ((zyxt_flags & Y_FLAG)?2:0) + 
+                       ((zyxt_flags & Y_FLAG)?2:0) +
                        ((zyxt_flags & X_FLAG)?2:0) +
                        ((zyxt_flags & T_FLAG)?2:0) );
-  
+
   if(_i2cPort->requestFrom(I2C_address, count) != count){
     return STATUS_ERROR;
   }
@@ -202,7 +203,7 @@ readMeasurement(uint8_t zyxt_flags, txyzRaw& txyz_result)
   return buffer[0];
 }
 
-uint8_t 
+uint8_t
 MLX90393::
 readRegister(uint8_t address, uint16_t& data)
 {
@@ -277,7 +278,7 @@ reset()
 {
   invalidateCache();
   uint8_t cmd = CMD_RESET;
-  
+
   uint8_t status = sendCommand(cmd);
   //Device now resets. We must give it time to complete
   delay(2);
@@ -309,7 +310,7 @@ convertRaw(MLX90393::txyzRaw raw)
 {
   txyz data;
 
-  float gain_factor = gain_multipliers[7 - (gain_sel & 0x7)];
+  float gain_factor = gain_multipliers[gain_sel & 0x7];
 
   if (tcmp_en){
     data.x = ( (raw.x - 32768.f) * base_xy_sens *
@@ -341,7 +342,7 @@ convertRaw(MLX90393::txyzRaw raw)
       data.y = int16_t(raw.y) * base_xy_sens * gain_factor * (1 << res_y);
       break;
     case 2:
-      data.y = ( (raw.y - 32768.f) * base_xy_sens * 
+      data.y = ( (raw.y - 32768.f) * base_xy_sens *
                  gain_factor * (1 << res_y) );
       break;
     case 3:
@@ -365,7 +366,7 @@ convertRaw(MLX90393::txyzRaw raw)
                  gain_factor * (1 << res_z) );
       break;
     case 3:
-      data.z = ( (raw.z - 16384.f) * base_z_sens * 
+      data.z = ( (raw.z - 16384.f) * base_z_sens *
                  gain_factor * (1 << res_z) );
       break;
     }
@@ -419,7 +420,7 @@ readData(MLX90393::txyz& data)
     delay(Tconv * 1.3f);
   }
   txyzRaw raw_txyz;
-  uint8_t status2 = 
+  uint8_t status2 =
     readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);
   data = convertRaw(raw_txyz);
   return checkStatus(status1) | checkStatus(status2);
@@ -431,9 +432,9 @@ setGainSel(uint8_t gain_sel)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(GAIN_SEL_REG, old_val);
-  
-  uint8_t status2 = writeRegister(GAIN_SEL_REG, 
-                                  (old_val & ~GAIN_SEL_MASK) | 
+
+  uint8_t status2 = writeRegister(GAIN_SEL_REG,
+                                  (old_val & ~GAIN_SEL_MASK) |
                                   ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
                                    GAIN_SEL_MASK));
 
@@ -462,8 +463,8 @@ setOverSampling(uint8_t osr)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(OSR_REG, old_val);
-  uint8_t status2 = writeRegister(OSR_REG, 
-                                  (old_val & ~OSR_MASK) | 
+  uint8_t status2 = writeRegister(OSR_REG,
+                                  (old_val & ~OSR_MASK) |
                                   ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK));
   this->osr = ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK) >> OSR_SHIFT;
   osr_dirty = 0;
@@ -487,8 +488,8 @@ setTemperatureOverSampling(uint8_t osr2)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(OSR2_REG, old_val);
-  uint8_t status2 = writeRegister(OSR2_REG, 
-                                  (old_val & ~OSR2_MASK) | 
+  uint8_t status2 = writeRegister(OSR2_REG,
+                                  (old_val & ~OSR2_MASK) |
                                   ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK));
   this->osr2 = ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK) >> OSR2_SHIFT;
   osr2_dirty = 0;
@@ -512,11 +513,11 @@ setDigitalFiltering(uint8_t dig_flt)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(DIG_FLT_REG, old_val);
-  uint8_t status2 = writeRegister(DIG_FLT_REG, 
-                                  (old_val & ~DIG_FLT_MASK) | 
+  uint8_t status2 = writeRegister(DIG_FLT_REG,
+                                  (old_val & ~DIG_FLT_MASK) |
                                   ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
                                    DIG_FLT_MASK));
-  this->dig_flt = ((uint16_t(dig_flt) << DIG_FLT_SHIFT) & 
+  this->dig_flt = ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
                    DIG_FLT_MASK) >> DIG_FLT_SHIFT;
   dig_flt_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
@@ -540,8 +541,8 @@ setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z)
   uint16_t res_xyz = ((res_z & 0x3)<<4) | ((res_y & 0x3)<<2) | (res_x & 0x3);
   uint16_t old_val;
   uint8_t status1 = readRegister(RES_XYZ_REG, old_val);
-  uint8_t status2 = writeRegister(RES_XYZ_REG, 
-                                  (old_val & ~RES_XYZ_MASK) | 
+  uint8_t status2 = writeRegister(RES_XYZ_REG,
+                                  (old_val & ~RES_XYZ_MASK) |
                                   (res_xyz << RES_XYZ_SHIFT) & RES_XYZ_MASK);
   this->res_x = res_x & 0x3;
   this->res_y = res_y & 0x3;
@@ -563,7 +564,7 @@ getResolution(uint8_t& res_x, uint8_t& res_y, uint8_t& res_z)
   res_xyz_dirty = 0;
   return checkStatus(status);
 }
- 
+
 uint8_t
 MLX90393::
 setTemperatureCompensation(uint8_t enabled)
@@ -571,8 +572,8 @@ setTemperatureCompensation(uint8_t enabled)
   uint8_t tcmp_en = enabled?1:0;
   uint16_t old_val;
   uint8_t status1 = readRegister(TCMP_EN_REG, old_val);
-  uint8_t status2 = writeRegister(TCMP_EN_REG, 
-                                  (old_val & ~TCMP_EN_MASK) | 
+  uint8_t status2 = writeRegister(TCMP_EN_REG,
+                                  (old_val & ~TCMP_EN_MASK) |
                                   ((uint16_t(tcmp_en) << TCMP_EN_SHIFT) &
                                    TCMP_EN_MASK));
   this->tcmp_en = tcmp_en;
