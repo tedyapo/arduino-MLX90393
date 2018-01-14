@@ -7,8 +7,13 @@
 MLX90393 mlx;
 
 void setup(){
+  Wire.begin();
+  //Wire.begin(18 /*SDA*/, 19 /*SCL*/);
+    
   // DRDY line connected to A3 (omit third parameter to used timed reads)
   //uint8_t status = mlx.begin(0, 0, A3);
+
+  // using timed reads
   uint8_t status = mlx.begin(0, 0);
   Serial.begin(9600);
 }
