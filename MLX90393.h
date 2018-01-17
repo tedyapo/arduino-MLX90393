@@ -74,6 +74,8 @@ public:
   uint8_t memoryStore();
   uint8_t nop();
   uint8_t sendCommand(uint8_t cmd);
+  uint8_t checkStatus(uint8_t status);
+  txyz convertRaw(txyzRaw raw);
 
   // higher-level API
   uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
@@ -128,8 +130,6 @@ private:
   float base_z_sens_hc0xc;
 
   void invalidateCache();
-  uint8_t checkStatus(uint8_t status);
-  txyz convertRaw(txyzRaw raw);
   
   private:
     TwoWire *_i2cPort; //The generic connection to user's chosen I2C hardware
