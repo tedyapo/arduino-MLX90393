@@ -12,22 +12,8 @@ MLX90393::
 MLX90393()
 {
   I2C_address = 0;
-  gain_sel = 0;
-  gain_sel_dirty = 1;
-  hallconf = 0;
-  hallconf_dirty = 1;
-  res_x = 0;
-  res_y = 0;
-  res_z = 0;
-  res_xyz_dirty = 1;
-  osr = 0;
-  osr_dirty = 1;
-  osr2 = 0;
-  osr2_dirty = 1;
-  dig_flt = 0;
-  dig_flt_dirty = 1;
-  tcmp_en = 0;
-  tcmp_en_dirty = 1;
+
+  cache_invalidate();
 
   // gain steps derived from datasheet section 15.1.4 tables
   gain_multipliers[0] = 5.f;
@@ -72,26 +58,38 @@ begin(uint8_t A1, uint8_t A0, int DRDY_pin, TwoWire &wirePort)
 
 void
 MLX90393::
-invalidateCache()
+cache_invalidate()
 {
-  gain_sel_dirty = 1;
-  hallconf_dirty = 1;
-  res_xyz_dirty = 1;
-  osr_dirty = 1;
-  osr2_dirty = 1;
-  dig_flt_dirty = 1;
-  tcmp_en_dirty = 1;
+  cache.dirty = 0xff;
+}
+
+void
+MLX90393::
+cache_set(uint8_t address, uint16_t data){
+  if (address < cache_t::SIZE){
+    cache.reg[address] = data;
+    cache.dirty &= ~(1 << address);
+  }
+}
+
+uint8_t
+MLX90393::
+cache_fill() {
+  for (uint8_t address=0; address < cache_t::SIZE; ++address){
+    if (cache.dirty & (1 << address)){
+      if (checkStatus(this->readRegister(address, cache.reg[address]))) {
+        return STATUS_ERROR;
+      }
+    }
+  }
+  return STATUS_OK;
 }
 
 uint8_t
 MLX90393::
 checkStatus(uint8_t status)
 {
-  if (status & ERROR_BIT){
-    return STATUS_ERROR;
-  } else {
-    return STATUS_OK;
-  }
+  return (status & ERROR_BIT) ? STATUS_ERROR : STATUS_OK;
 }
 
 uint8_t
@@ -215,7 +213,7 @@ readRegister(uint8_t address, uint16_t& data)
   _i2cPort->beginTransmission(I2C_address);
 
   if (_i2cPort->write(CMD_READ_REGISTER) != 1){
-	return STATUS_ERROR;
+    return STATUS_ERROR;
   }
   if (_i2cPort->write((address & 0x3f)<<2) != 1){
     return STATUS_ERROR;
@@ -243,6 +241,8 @@ readRegister(uint8_t address, uint16_t& data)
     return STATUS_ERROR;
   }
   data = (uint16_t(b_h)<<8) | b_l;
+
+  cache_set(address, data);
   return status;
 }
 
@@ -250,7 +250,10 @@ uint8_t
 MLX90393::
 writeRegister(uint8_t address, uint16_t data)
 {
-  invalidateCache();
+  // Once we write ANY register we have no clue
+  // how the cache will end up.
+  cache_invalidate();
+
   _i2cPort->beginTransmission(I2C_address);
   if ( _i2cPort->write(CMD_WRITE_REGISTER) != 1){
     return STATUS_ERROR;
@@ -281,7 +284,7 @@ uint8_t
 MLX90393::
 reset()
 {
-  invalidateCache();
+  cache_invalidate();
   uint8_t cmd = CMD_RESET;
 
   uint8_t status = sendCommand(cmd);
@@ -296,7 +299,7 @@ uint8_t
 MLX90393::
 memoryRecall()
 {
-  invalidateCache();
+  cache_invalidate();
   uint8_t cmd = CMD_MEMORY_RECALL;
   return sendCommand(cmd);
 }
@@ -399,33 +402,16 @@ uint8_t
 MLX90393::
 readData(MLX90393::txyz& data)
 {
-  // refresh cached values if dirty - used for scaling after read
-  if (gain_sel_dirty){
-    uint8_t gs;
-    getGainSel(gs);
-  }
-  if (hallconf_dirty){
-    uint8_t hc;
-    getHallConf(hc);
-  }
-  if (res_xyz_dirty){
-    uint8_t rx, ry, rz;
-    getResolution(rx, ry, rz);
-  }
-  if (tcmp_en_dirty){
-    uint8_t en;
-    getTemperatureCompensation(en);
-  }
-  if (DRDY_pin < 0){
-    if (osr_dirty){
-      uint8_t osr;
-      getOverSampling(osr);
-    }
-    if (osr2_dirty){
-      uint8_t osr2;
-      getOverSampling(osr2);
-    }
-  }
+  if (cache_fill() != STATUS_OK){ return STATUS_ERROR; };
+  const uint8_t gs = (cache.reg[GAIN_SEL_REG] & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
+  const uint8_t hallconf = (cache.reg[HALLCONF_REG] & HALLCONF_MASK) >> HALLCONF_SHIFT;
+  const uint8_t res_xyz = (cache.reg[RES_XYZ_REG] & RES_XYZ_MASK) >> RES_XYZ_SHIFT;
+  const uint8_t rx = (res_xyz >> 0) & 0x3;
+  const uint8_t ry = (res_xyz >> 2) & 0x3;
+  const uint8_t rz = (res_xyz >> 4) & 0x3;
+  const uint8_t en = (cache.reg[TCMP_EN_REG] & TCMP_EN_MASK) >> TCMP_EN_SHIFT;
+  const uint8_t osr = (cache.reg[OSR_REG] & OSR_MASK) >> OSR_SHIFT;
+  const uint8_t osr2 = (cache.reg[OSR2_REG] & OSR2_MASK) >> OSR2_SHIFT;
 
   uint8_t status1 = startMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG);
 
@@ -460,12 +446,6 @@ setGainSel(uint8_t gain_sel)
                                   (old_val & ~GAIN_SEL_MASK) |
                                   ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
                                    GAIN_SEL_MASK));
-
-  this->gain_sel = ((uint16_t(gain_sel) << GAIN_SEL_SHIFT) &
-                    GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
-
-  gain_sel_dirty = 0;
-
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -475,8 +455,7 @@ getGainSel(uint8_t& gain_sel)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(GAIN_SEL_REG, reg_val);
-  this->gain_sel = gain_sel = (reg_val & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
-  gain_sel_dirty = 0;
+  gain_sel = (reg_val & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
   return checkStatus(status);
 }
 
@@ -486,17 +465,10 @@ setHallConf(uint8_t hallconf)
 {
   uint16_t old_val;
   uint8_t status1 = readRegister(HALLCONF_REG, old_val);
-
   uint8_t status2 = writeRegister(HALLCONF_REG,
                                   (old_val & ~HALLCONF_MASK) |
                                   ((uint16_t(hallconf) << HALLCONF_SHIFT) &
                                    HALLCONF_MASK));
-
-  this->hallconf = ((uint16_t(hallconf) << HALLCONF_SHIFT) &
-                    HALLCONF_MASK) >> HALLCONF_SHIFT;
-
-  hallconf_dirty = 0;
-
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -506,8 +478,7 @@ getHallConf(uint8_t& hallconf)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(HALLCONF_REG, reg_val);
-  this->hallconf = hallconf = (reg_val & HALLCONF_MASK) >> HALLCONF_SHIFT;
-  hallconf_dirty = 0;
+  hallconf = (reg_val & HALLCONF_MASK) >> HALLCONF_SHIFT;
   return checkStatus(status);
 }
 
@@ -520,8 +491,6 @@ setOverSampling(uint8_t osr)
   uint8_t status2 = writeRegister(OSR_REG,
                                   (old_val & ~OSR_MASK) |
                                   ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK));
-  this->osr = ((uint16_t(osr) << OSR_SHIFT) & OSR_MASK) >> OSR_SHIFT;
-  osr_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -531,8 +500,7 @@ getOverSampling(uint8_t& osr)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(OSR_REG, reg_val);
-  this->osr = osr = (reg_val & OSR_MASK) >> OSR_SHIFT;
-  osr_dirty = 0;
+  osr = (reg_val & OSR_MASK) >> OSR_SHIFT;
   return checkStatus(status);
 }
 
@@ -545,8 +513,6 @@ setTemperatureOverSampling(uint8_t osr2)
   uint8_t status2 = writeRegister(OSR2_REG,
                                   (old_val & ~OSR2_MASK) |
                                   ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK));
-  this->osr2 = ((uint16_t(osr2) << OSR2_SHIFT) & OSR2_MASK) >> OSR2_SHIFT;
-  osr2_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -556,8 +522,7 @@ getTemperatureOverSampling(uint8_t& osr2)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(OSR2_REG, reg_val);
-  this->osr2 = osr2 = (reg_val & OSR2_MASK) >> OSR2_SHIFT;
-  osr2_dirty = 0;
+  osr2 = (reg_val & OSR2_MASK) >> OSR2_SHIFT;
   return checkStatus(status);
 }
 
@@ -571,9 +536,6 @@ setDigitalFiltering(uint8_t dig_flt)
                                   (old_val & ~DIG_FLT_MASK) |
                                   ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
                                    DIG_FLT_MASK));
-  this->dig_flt = ((uint16_t(dig_flt) << DIG_FLT_SHIFT) &
-                   DIG_FLT_MASK) >> DIG_FLT_SHIFT;
-  dig_flt_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -583,8 +545,7 @@ getDigitalFiltering(uint8_t& dig_flt)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(DIG_FLT_REG, reg_val);
-  this->dig_flt = dig_flt = (reg_val & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
-  dig_flt_dirty = 0;
+  dig_flt = (reg_val & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
   return checkStatus(status);
 }
 
@@ -598,10 +559,6 @@ setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z)
   uint8_t status2 = writeRegister(RES_XYZ_REG,
                                   (old_val & ~RES_XYZ_MASK) |
                                   (res_xyz << RES_XYZ_SHIFT) & RES_XYZ_MASK);
-  this->res_x = res_x & 0x3;
-  this->res_y = res_y & 0x3;
-  this->res_z = res_z & 0x3;
-  res_xyz_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -612,10 +569,9 @@ getResolution(uint8_t& res_x, uint8_t& res_y, uint8_t& res_z)
   uint16_t reg_val;
   uint8_t status = readRegister(RES_XYZ_REG, reg_val);
   uint8_t res_xyz = (reg_val & RES_XYZ_MASK) >> RES_XYZ_SHIFT;
-  this->res_x = res_x = (res_xyz >> 0) & 0x3;
-  this->res_y = res_y = (res_xyz >> 2) & 0x3;
-  this->res_z = res_z = (res_xyz >> 4) & 0x3;
-  res_xyz_dirty = 0;
+  res_x = (res_xyz >> 0) & 0x3;
+  res_y = (res_xyz >> 2) & 0x3;
+  res_z = (res_xyz >> 4) & 0x3;
   return checkStatus(status);
 }
 
@@ -630,8 +586,6 @@ setTemperatureCompensation(uint8_t enabled)
                                   (old_val & ~TCMP_EN_MASK) |
                                   ((uint16_t(tcmp_en) << TCMP_EN_SHIFT) &
                                    TCMP_EN_MASK));
-  this->tcmp_en = tcmp_en;
-  tcmp_en_dirty = 0;
   return checkStatus(status1) | checkStatus(status2);
 }
 
@@ -641,8 +595,7 @@ getTemperatureCompensation(uint8_t& enabled)
 {
   uint16_t reg_val;
   uint8_t status = readRegister(TCMP_EN_REG, reg_val);
-  this->tcmp_en = enabled = (reg_val & TCMP_EN_MASK) >> TCMP_EN_SHIFT;
-  tcmp_en_dirty = 0;
+  enabled = (reg_val & TCMP_EN_MASK) >> TCMP_EN_SHIFT;
   return checkStatus(status);
 }
 

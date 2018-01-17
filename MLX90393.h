@@ -116,29 +116,30 @@ private:
   uint8_t I2C_address;
   int DRDY_pin;
   uint8_t gain_sel;
-  uint8_t gain_sel_dirty;
   uint8_t hallconf;
-  uint8_t hallconf_dirty;
   uint8_t res_x;
   uint8_t res_y;
   uint8_t res_z;
-  uint8_t res_xyz_dirty;
   uint8_t osr;
-  uint8_t osr_dirty;
   uint8_t osr2;
-  uint8_t osr2_dirty;
   uint8_t dig_flt;
-  uint8_t dig_flt_dirty;
   uint8_t tcmp_en;
-  uint8_t tcmp_en_dirty;
+
+  struct cache_t {
+    enum { SIZE = 3 };
+    uint8_t dirty;
+    uint16_t reg[SIZE];
+  } cache;
+  void cache_invalidate();
+  void cache_set(uint8_t address, uint16_t data);
+  uint8_t cache_fill();
+
 
   float gain_multipliers[8];
   float base_xy_sens_hc0;
   float base_z_sens_hc0;
   float base_xy_sens_hc0xc;
   float base_z_sens_hc0xc;
-
-  void invalidateCache();
 
   private:
     TwoWire *_i2cPort; //The generic connection to user's chosen I2C hardware
