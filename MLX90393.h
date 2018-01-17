@@ -20,6 +20,9 @@ public:
   enum { I2C_BASE_ADDR = 0x0c };
   enum { GAIN_SEL_REG = 0x0, GAIN_SEL_MASK = 0x0070, GAIN_SEL_SHIFT = 4 };
   enum { HALLCONF_REG = 0x0, HALLCONF_MASK = 0x000f, HALLCONF_SHIFT = 0 };
+  enum { BURST_SEL_REG = 0x1, BURST_SEL_MASK = 0x03c0, BURST_SEL_SHIFT = 6};
+  enum { TRIG_INT_SEL_REG = 0x1, TRIG_INT_SEL_MASK = 0x8000, TRIG_INT_SEL_SHIFT = 15 };
+  enum { EXT_TRIG_REG = 0x1, EXT_TRIG_MASK = 0x0800, EXT_TRIG_SHIFT = 11 };
   enum { OSR_REG = 0x2, OSR_MASK = 0x0003, OSR_SHIFT = 0 };
   enum { OSR2_REG = 0x2, OSR2_MASK = 0x1800, OSR2_SHIFT = 11 };
   enum { DIG_FLT_REG = 0x2, DIG_FLT_MASK = 0x001c, DIG_FLT_SHIFT = 2 };
@@ -27,7 +30,7 @@ public:
   enum { TCMP_EN_REG = 0x1, TCMP_EN_MASK = 0x0400, TCMP_EN_SHIFT = 10 };
   enum { X_OFFSET_REG = 4, Y_OFFSET_REG = 5, Z_OFFSET_REG = 6 };
   enum { WOXY_THRESHOLD_REG = 7, WOZ_THRESHOLD_REG = 8, WOT_THRESHOLD_REG = 9 };
-  enum { BURST_MODE_BIT = 0x80, WAKE_ON_CHANGE_BIT = 0x40, 
+  enum { BURST_MODE_BIT = 0x80, WAKE_ON_CHANGE_BIT = 0x40,
          POLLING_MODE_BIT = 0x20, ERROR_BIT = 0x10, EEC_BIT = 0x08,
          RESET_BIT = 0x04, D1_BIT = 0x02, D0_BIT = 0x01 };
 
@@ -60,7 +63,7 @@ public:
     uint16_t z;
   };
   MLX90393();
-  
+
   // raw device commands
   uint8_t exit();
   uint8_t startBurst(uint8_t zyxt_flags);
@@ -86,6 +89,12 @@ public:
   uint8_t getGainSel(uint8_t& gain_sel);
   uint8_t setHallConf(uint8_t hallconf);
   uint8_t getHallConf(uint8_t& hallconf);
+  uint8_t setBurstSel(uint8_t burst_sel);
+  uint8_t getBurstSel(uint8_t& burst_sel);
+  uint8_t setExtTrig(int8_t ext_trig);
+  uint8_t getExtTrig(uint8_t& ext_trig);
+  uint8_t setTrigIntSel(uint8_t trig_int_sel);
+  uint8_t getTrigIntSel(uint8_t& trig_int_sel);
   uint8_t setOverSampling(uint8_t osr);
   uint8_t getOverSampling(uint8_t& osr);
   uint8_t setTemperatureOverSampling(uint8_t osr2);
@@ -130,7 +139,7 @@ private:
   float base_z_sens_hc0xc;
 
   void invalidateCache();
-  
+
   private:
     TwoWire *_i2cPort; //The generic connection to user's chosen I2C hardware
 

@@ -327,7 +327,7 @@ convertRaw(MLX90393::txyzRaw raw)
     xy_sens = base_xy_sens_hc0xc;
     z_sens = base_z_sens_hc0xc;
     break;
-  }   
+  }
 
   float gain_factor = gain_multipliers[gain_sel & 0x7];
 
@@ -645,6 +645,77 @@ getTemperatureCompensation(uint8_t& enabled)
   tcmp_en_dirty = 0;
   return checkStatus(status);
 }
+
+uint8_t
+MLX90393::
+setBurstSel(uint8_t burst_sel)
+{
+  uint16_t old_val;
+  uint8_t status1 = readRegister(BURST_SEL_REG, old_val);
+  uint8_t status2 = writeRegister(BURST_SEL_REG,
+                                  (old_val & ~BURST_SEL_MASK) |
+                                  ((uint16_t(burst_sel) << BURST_SEL_SHIFT) &
+                                   BURST_SEL_MASK));
+  return checkStatus(status1) | checkStatus(status2);
+}
+
+uint8_t
+MLX90393::
+getBurstSel(uint8_t& burst_sel)
+{
+  uint16_t reg_val;
+  uint8_t status = readRegister(BURST_SEL_REG, reg_val);
+  burst_sel = (reg_val & BURST_SEL_MASK) >> BURST_SEL_SHIFT;
+  return checkStatus(status);
+}
+
+uint8_t
+MLX90393::
+setExtTrig(int8_t ext_trig)
+{
+  uint16_t old_val;
+  uint8_t status1 = readRegister(EXT_TRIG_REG, old_val);
+  uint8_t status2 = writeRegister(EXT_TRIG_REG,
+                                  (old_val & ~EXT_TRIG_MASK) |
+                                  ((uint16_t(ext_trig) << EXT_TRIG_SHIFT) &
+                                   EXT_TRIG_MASK));
+  return checkStatus(status1) | checkStatus(status2);
+}
+
+uint8_t
+MLX90393::
+getExtTrig(uint8_t& ext_trig)
+{
+  uint16_t reg_val;
+  uint8_t status = readRegister(EXT_TRIG_REG, reg_val);
+  ext_trig = (reg_val & EXT_TRIG_MASK) >> EXT_TRIG_SHIFT;
+  return checkStatus(status);
+
+}
+
+uint8_t
+MLX90393::
+setTrigIntSel(uint8_t trig_int_sel)
+{
+  uint16_t old_val;
+  uint8_t status1 = readRegister(TRIG_INT_SEL_REG, old_val);
+  uint8_t status2 = writeRegister(TRIG_INT_SEL_REG,
+                                  (old_val & ~TRIG_INT_SEL_MASK) |
+                                  ((uint16_t(trig_int_sel) << TRIG_INT_SEL_SHIFT) &
+                                   TRIG_INT_SEL_MASK));
+  return checkStatus(status1) | checkStatus(status2);
+}
+
+uint8_t
+MLX90393::
+getTrigIntSel(uint8_t& trig_int_sel)
+{
+  uint16_t reg_val;
+  uint8_t status = readRegister(TRIG_INT_SEL_REG, reg_val);
+  trig_int_sel = (reg_val & TRIG_INT_SEL_MASK) >> TRIG_INT_SEL_SHIFT;
+  return checkStatus(status);
+}
+
 
 //
 // Note: offsets are relative to 0x8000
