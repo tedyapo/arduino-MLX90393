@@ -366,6 +366,17 @@ convertRaw(MLX90393::txyzRaw raw)
   return data;
 }
 
+uint16_t
+MLX90393::
+convDelayMillis() {
+  return
+    (DRDY_pin >= 0)? 0 /* no delay if drdy pin present */ :
+                     // estimate conversion time from datasheet equations
+                     ( 3 * (2 + (1 << dig_flt)) * (1 << osr) *0.064f +
+                      (1 << osr2) * 0.192f ) *
+                       1.3f;  // 30% tolerance
+}
+
 uint8_t
 MLX90393::
 readData(MLX90393::txyz& data)
@@ -390,12 +401,9 @@ readData(MLX90393::txyz& data)
       // busy wait
     }
   } else {
-    // estimate conversion time from datasheet equations
-    float Tconv = ( 3 * (2 + (1 << dig_flt)) * (1 << osr) *0.064f +
-                    (1 << osr2) * 0.192f );
-    // add 30% tolerance
-    delay(Tconv * 1.3f);
+    delay(this->convDelayMillis());
   }
+
   txyzRaw raw_txyz;
   uint8_t status2 =
     readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);

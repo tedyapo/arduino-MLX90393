@@ -79,6 +79,7 @@ public:
   uint8_t sendCommand(uint8_t cmd);
   uint8_t checkStatus(uint8_t status);
   txyz convertRaw(txyzRaw raw);
+  uint16_t convDelayMillis();
 
   // higher-level API
   uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
