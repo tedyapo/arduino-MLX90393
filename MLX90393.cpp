@@ -85,7 +85,7 @@ MLX90393::
 cache_fill() {
   for (uint8_t address=0; address < cache_t::SIZE; ++address){
     if (cache.dirty & (1 << address)){
-      if (checkStatus(this->readRegister(address, cache.reg[address]))) {
+      if (hasError(this->readRegister(address, cache.reg[address]))) {
         return STATUS_ERROR;
       }
     }
@@ -267,7 +267,7 @@ writeRegister(uint8_t address, uint16_t data)
   if (!_i2cPort->available()){ return STATUS_ERROR; }
 
   const uint8_t status = _i2cPort->read();
-  if (!checkStatus(status)) {
+  if (isOK(status)) {
     cache_set(address, data);
   }
   return status;
