@@ -78,6 +78,8 @@ public:
   uint8_t nop();
   uint8_t sendCommand(uint8_t cmd);
   uint8_t checkStatus(uint8_t status);
+  bool isOK(uint8_t status);
+  bool hasError(uint8_t status);
   txyz convertRaw(txyzRaw raw);
   uint16_t convDelayMillis();
 

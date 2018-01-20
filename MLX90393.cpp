@@ -100,6 +100,21 @@ checkStatus(uint8_t status)
   return (status & ERROR_BIT) ? STATUS_ERROR : STATUS_OK;
 }
 
+bool
+MLX90393::
+isOK(uint8_t status)
+{
+  return (status & ERROR_BIT) == 0;
+}
+
+bool
+MLX90393::
+hasError(uint8_t status)
+{
+  return (status & ERROR_BIT) != 0;
+}
+
+
 uint8_t
 MLX90393::
 sendCommand(uint8_t cmd)
