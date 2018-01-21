@@ -52,9 +52,8 @@ begin(uint8_t A1, uint8_t A0, int DRDY_pin, TwoWire &wirePort)
   uint8_t status4 = setOverSampling(3);
   uint8_t status5 = setDigitalFiltering(7);
   uint8_t status6 = setTemperatureCompensation(0);
-  uint8_t status7 = cache_fill();
 
-  return status1 | status2 | status3 | status4 | status5 | status6 | status7;
+  return status1 | status2 | status3 | status4 | status5 | status6;
 }
 
 void
@@ -83,10 +82,12 @@ cache_set(uint8_t address, uint16_t data){
 uint8_t
 MLX90393::
 cache_fill() {
-  for (uint8_t address=0; address < cache_t::SIZE; ++address){
-    if (cache.dirty & (1 << address)){
-      if (hasError(this->readRegister(address, cache.reg[address]))) {
-        return STATUS_ERROR;
+  if (cache.dirty != 0) {
+    for (uint8_t address=0; address < cache_t::SIZE; ++address){
+      if (cache.dirty & (1 << address)){
+        if (hasError(this->readRegister(address, cache.reg[address]))) {
+          return STATUS_ERROR;
+        }
       }
     }
   }
@@ -145,6 +146,7 @@ uint8_t
 MLX90393::
 startBurst(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_START_BURST | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -153,6 +155,7 @@ uint8_t
 MLX90393::
 startWakeOnChange(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_WAKE_ON_CHANGE | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -161,6 +164,7 @@ uint8_t
 MLX90393::
 startMeasurement(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_START_MEASUREMENT | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -278,15 +282,13 @@ MLX90393::
 reset()
 {
   cache_invalidate();
-  uint8_t cmd = CMD_RESET;
 
-  uint8_t status = sendCommand(cmd);
+  uint8_t status = sendCommand(CMD_RESET);
   //Device now resets. We must give it time to complete
   delay(2);
   // POR is 1.6ms max. Software reset time limit is not specified.
   // 2ms was found to be good.
 
-  status |= cache_fill();
   return status;
 }
 
@@ -295,20 +297,14 @@ MLX90393::
 memoryRecall()
 {
   cache_invalidate();
-  uint8_t cmd = CMD_MEMORY_RECALL;
-
-  uint8_t status = sendCommand(cmd);
-
-  status |= cache_fill();
-  return status;
+  return sendCommand(CMD_MEMORY_RECALL);
 }
 
 uint8_t
 MLX90393::
 memoryStore()
 {
-  uint8_t cmd = CMD_MEMORY_STORE;
-  return sendCommand(cmd);
+  return sendCommand(CMD_MEMORY_STORE);
 }
 
 MLX90393::txyz
