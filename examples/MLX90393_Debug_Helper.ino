@@ -995,7 +995,7 @@ namespace parser {
                             if (c != command_separator) goto l_separator_error;
                             print(F("Hall configuration: "));
                             println(previous_char);
-                            show::status(mlx.setHallConf(parse_digit(previous_char)));
+                            show::status(mlx.setHallConf(parse_hexadecimal_digit(previous_char)));
                         }
                         goto l_done;
                     }
