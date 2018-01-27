@@ -19,8 +19,8 @@
 
 #include <MLX90393.h>
 
-#define print(...)   Serial.print( __VA_ARGS__)
-#define println(...) Serial.println( __VA_ARGS__)
+#define print(...)   Serial.print( __VA_ARGS__ )
+#define println(...) Serial.println( __VA_ARGS__ )
 
 
 MLX90393 mlx;
