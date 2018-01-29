@@ -78,7 +78,10 @@ public:
   uint8_t nop();
   uint8_t sendCommand(uint8_t cmd);
   uint8_t checkStatus(uint8_t status);
+  bool isOK(uint8_t status);
+  bool hasError(uint8_t status);
   txyz convertRaw(txyzRaw raw);
+  uint16_t convDelayMillis();
 
   // higher-level API
   uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
@@ -111,26 +114,17 @@ public:
   uint8_t setWOTThreshold(uint16_t wot_thresh);
 
 private:
-
-  // parameters are cached to avoid reading them from sensor unnecessarily
   uint8_t I2C_address;
   int DRDY_pin;
-  uint8_t gain_sel;
-  uint8_t hallconf;
-  uint8_t res_x;
-  uint8_t res_y;
-  uint8_t res_z;
-  uint8_t osr;
-  uint8_t osr2;
-  uint8_t dig_flt;
-  uint8_t tcmp_en;
 
+  // parameters are cached to avoid reading them from sensor unnecessarily
   struct cache_t {
-    enum { SIZE = 3 };
+    enum { SIZE = 3, ALL_DIRTY_MASK = 1 << (SIZE + 1) - 1};
     uint8_t dirty;
     uint16_t reg[SIZE];
   } cache;
   void cache_invalidate();
+  void cache_invalidate(uint8_t address);
   void cache_set(uint8_t address, uint16_t data);
   uint8_t cache_fill();
 

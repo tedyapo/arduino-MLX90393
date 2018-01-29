@@ -1,0 +1,9 @@
+Known issues:
+  - If the MLX90393 is in burst mode then reading often fails.
+    Please do NOT report this issue unless you can help me with
+    insights why this happens. Even better: provide a pull request
+    with a fix.
+
+  - Register access to MLX90393 does not work while in burst mode.
+    This is how the chip operates and not a bug of the debug helper.
+    From the point of view of the debug helper this is a feature.

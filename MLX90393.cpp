@@ -60,7 +60,14 @@ void
 MLX90393::
 cache_invalidate()
 {
-  cache.dirty = 0xff;
+  cache.dirty = cache_t::ALL_DIRTY_MASK;
+}
+
+void
+MLX90393::
+cache_invalidate(uint8_t address)
+{
+  cache.dirty |= cache_t::ALL_DIRTY_MASK & (1<<address);
 }
 
 void
@@ -75,10 +82,12 @@ cache_set(uint8_t address, uint16_t data){
 uint8_t
 MLX90393::
 cache_fill() {
-  for (uint8_t address=0; address < cache_t::SIZE; ++address){
-    if (cache.dirty & (1 << address)){
-      if (checkStatus(this->readRegister(address, cache.reg[address]))) {
-        return STATUS_ERROR;
+  if (cache.dirty != 0) {
+    for (uint8_t address=0; address < cache_t::SIZE; ++address){
+      if (cache.dirty & (1 << address)){
+        if (hasError(this->readRegister(address, cache.reg[address]))) {
+          return STATUS_ERROR;
+        }
       }
     }
   }
@@ -91,6 +100,21 @@ checkStatus(uint8_t status)
 {
   return (status & ERROR_BIT) ? STATUS_ERROR : STATUS_OK;
 }
+
+bool
+MLX90393::
+isOK(uint8_t status)
+{
+  return (status & ERROR_BIT) == 0;
+}
+
+bool
+MLX90393::
+hasError(uint8_t status)
+{
+  return (status & ERROR_BIT) != 0;
+}
+
 
 uint8_t
 MLX90393::
@@ -122,6 +146,7 @@ uint8_t
 MLX90393::
 startBurst(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_START_BURST | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -130,6 +155,7 @@ uint8_t
 MLX90393::
 startWakeOnChange(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_WAKE_ON_CHANGE | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -138,6 +164,7 @@ uint8_t
 MLX90393::
 startMeasurement(uint8_t zyxt_flags)
 {
+  cache_fill();
   uint8_t cmd = CMD_START_MEASUREMENT | (zyxt_flags & 0xf);
   return sendCommand(cmd);
 }
@@ -232,9 +259,7 @@ uint8_t
 MLX90393::
 writeRegister(uint8_t address, uint16_t data)
 {
-  // Once we write ANY register we have no clue
-  // how the cache will end up.
-  cache_invalidate();
+  cache_invalidate(address);
 
   _i2cPort->beginTransmission(I2C_address);
   if (_i2cPort->write(CMD_WRITE_REGISTER) != 1){ return STATUS_ERROR; }
@@ -245,7 +270,11 @@ writeRegister(uint8_t address, uint16_t data)
   if (_i2cPort->requestFrom(I2C_address, uint8_t(1)) != 1){ return STATUS_ERROR; }
   if (!_i2cPort->available()){ return STATUS_ERROR; }
 
-  return _i2cPort->read();
+  const uint8_t status = _i2cPort->read();
+  if (isOK(status)) {
+    cache_set(address, data);
+  }
+  return status;
 }
 
 uint8_t
@@ -253,13 +282,13 @@ MLX90393::
 reset()
 {
   cache_invalidate();
-  uint8_t cmd = CMD_RESET;
 
-  uint8_t status = sendCommand(cmd);
+  uint8_t status = sendCommand(CMD_RESET);
   //Device now resets. We must give it time to complete
   delay(2);
   // POR is 1.6ms max. Software reset time limit is not specified.
   // 2ms was found to be good.
+
   return status;
 }
 
@@ -268,22 +297,28 @@ MLX90393::
 memoryRecall()
 {
   cache_invalidate();
-  uint8_t cmd = CMD_MEMORY_RECALL;
-  return sendCommand(cmd);
+  return sendCommand(CMD_MEMORY_RECALL);
 }
 
 uint8_t
 MLX90393::
 memoryStore()
 {
-  uint8_t cmd = CMD_MEMORY_STORE;
-  return sendCommand(cmd);
+  return sendCommand(CMD_MEMORY_STORE);
 }
 
 MLX90393::txyz
 MLX90393::
 convertRaw(MLX90393::txyzRaw raw)
 {
+  const uint8_t gain_sel = (cache.reg[GAIN_SEL_REG] & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
+  const uint8_t hallconf = (cache.reg[HALLCONF_REG] & HALLCONF_MASK) >> HALLCONF_SHIFT;
+  const uint8_t res_xyz = (cache.reg[RES_XYZ_REG] & RES_XYZ_MASK) >> RES_XYZ_SHIFT;
+  const uint8_t res_x = (res_xyz >> 0) & 0x3;
+  const uint8_t res_y = (res_xyz >> 2) & 0x3;
+  const uint8_t res_z = (res_xyz >> 4) & 0x3;
+  uint8_t tcmp_en = (cache.reg[TCMP_EN_REG] & TCMP_EN_MASK) >> TCMP_EN_SHIFT;
+
   txyz data;
   float xy_sens;
   float z_sens;
@@ -366,21 +401,25 @@ convertRaw(MLX90393::txyzRaw raw)
   return data;
 }
 
+uint16_t
+MLX90393::
+convDelayMillis() {
+  const uint8_t osr = (cache.reg[OSR_REG] & OSR_MASK) >> OSR_SHIFT;
+  const uint8_t osr2 = (cache.reg[OSR2_REG] & OSR2_MASK) >> OSR2_SHIFT;
+  const uint8_t dig_flt = (cache.reg[DIG_FLT_MASK] & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
+
+  return
+    (DRDY_pin >= 0)? 0 /* no delay if drdy pin present */ :
+                     // estimate conversion time from datasheet equations
+                     ( 3 * (2 + (1 << dig_flt)) * (1 << osr) *0.064f +
+                      (1 << osr2) * 0.192f ) *
+                       1.3f;  // 30% tolerance
+}
+
 uint8_t
 MLX90393::
 readData(MLX90393::txyz& data)
 {
-  if (cache_fill() != STATUS_OK){ return STATUS_ERROR; };
-  const uint8_t gs = (cache.reg[GAIN_SEL_REG] & GAIN_SEL_MASK) >> GAIN_SEL_SHIFT;
-  const uint8_t hallconf = (cache.reg[HALLCONF_REG] & HALLCONF_MASK) >> HALLCONF_SHIFT;
-  const uint8_t res_xyz = (cache.reg[RES_XYZ_REG] & RES_XYZ_MASK) >> RES_XYZ_SHIFT;
-  const uint8_t rx = (res_xyz >> 0) & 0x3;
-  const uint8_t ry = (res_xyz >> 2) & 0x3;
-  const uint8_t rz = (res_xyz >> 4) & 0x3;
-  const uint8_t en = (cache.reg[TCMP_EN_REG] & TCMP_EN_MASK) >> TCMP_EN_SHIFT;
-  const uint8_t osr = (cache.reg[OSR_REG] & OSR_MASK) >> OSR_SHIFT;
-  const uint8_t osr2 = (cache.reg[OSR2_REG] & OSR2_MASK) >> OSR2_SHIFT;
-
   uint8_t status1 = startMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG);
 
   // wait for DRDY signal if connected, otherwise delay appropriately
@@ -390,12 +429,9 @@ readData(MLX90393::txyz& data)
       // busy wait
     }
   } else {
-    // estimate conversion time from datasheet equations
-    float Tconv = ( 3 * (2 + (1 << dig_flt)) * (1 << osr) *0.064f +
-                    (1 << osr2) * 0.192f );
-    // add 30% tolerance
-    delay(Tconv * 1.3f);
+    delay(this->convDelayMillis());
   }
+
   txyzRaw raw_txyz;
   uint8_t status2 =
     readMeasurement(X_FLAG | Y_FLAG | Z_FLAG | T_FLAG, raw_txyz);
