@@ -406,7 +406,7 @@ MLX90393::
 convDelayMillis() {
   const uint8_t osr = (cache.reg[OSR_REG] & OSR_MASK) >> OSR_SHIFT;
   const uint8_t osr2 = (cache.reg[OSR2_REG] & OSR2_MASK) >> OSR2_SHIFT;
-  const uint8_t dig_flt = (cache.reg[DIG_FLT_MASK] & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
+  const uint8_t dig_flt = (cache.reg[DIG_FLT_REG] & DIG_FLT_MASK) >> DIG_FLT_SHIFT;
 
   return
     (DRDY_pin >= 0)? 0 /* no delay if drdy pin present */ :
