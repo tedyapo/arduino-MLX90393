@@ -561,8 +561,8 @@ setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z)
   uint16_t old_val;
   uint8_t status1 = readRegister(RES_XYZ_REG, old_val);
   uint8_t status2 = writeRegister(RES_XYZ_REG,
-                                  (old_val & ~RES_XYZ_MASK) |
-                                  (res_xyz << RES_XYZ_SHIFT) & RES_XYZ_MASK);
+                                 ((old_val & ~RES_XYZ_MASK) |
+                                  (res_xyz << RES_XYZ_SHIFT)) & RES_XYZ_MASK);
   return checkStatus(status1) | checkStatus(status2);
 }
 

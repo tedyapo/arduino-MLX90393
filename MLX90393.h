@@ -119,7 +119,7 @@ private:
 
   // parameters are cached to avoid reading them from sensor unnecessarily
   struct cache_t {
-    enum { SIZE = 3, ALL_DIRTY_MASK = 1 << (SIZE + 1) - 1};
+    enum { SIZE = 3, ALL_DIRTY_MASK = (1 << (SIZE + 1)) - 1};
     uint8_t dirty;
     uint16_t reg[SIZE];
   } cache;
