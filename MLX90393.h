@@ -84,7 +84,7 @@ public:
   uint16_t convDelayMillis();
 
   // higher-level API
-  uint8_t begin(uint8_t A1 = 0, uint8_t A0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
+  uint8_t begin(uint8_t addr1 = 0, uint8_t addr0 = 0, int DRDY_pin = -1, TwoWire &wirePort = Wire);
 
   // returns B (x,y,z) in uT, temperature in C
   uint8_t readData(txyz& data);
@@ -119,7 +119,7 @@ private:
 
   // parameters are cached to avoid reading them from sensor unnecessarily
   struct cache_t {
-    enum { SIZE = 3, ALL_DIRTY_MASK = 1 << (SIZE + 1) - 1};
+    enum { SIZE = 3, ALL_DIRTY_MASK = (1 << (SIZE + 1)) - 1};
     uint8_t dirty;
     uint16_t reg[SIZE];
   } cache;

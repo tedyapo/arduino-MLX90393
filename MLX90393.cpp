@@ -36,9 +36,9 @@ MLX90393()
 
 uint8_t
 MLX90393::
-begin(uint8_t A1, uint8_t A0, int DRDY_pin, TwoWire &wirePort)
+begin(uint8_t addr1, uint8_t addr0, int DRDY_pin, TwoWire &wirePort)
 {
-  I2C_address = I2C_BASE_ADDR | (A1?2:0) | (A0?1:0);
+  I2C_address = I2C_BASE_ADDR | (addr1?2:0) | (addr0?1:0);
   this->DRDY_pin = DRDY_pin;
   if (DRDY_pin >= 0){
     pinMode(DRDY_pin, INPUT);
@@ -561,8 +561,8 @@ setResolution(uint8_t res_x, uint8_t res_y, uint8_t res_z)
   uint16_t old_val;
   uint8_t status1 = readRegister(RES_XYZ_REG, old_val);
   uint8_t status2 = writeRegister(RES_XYZ_REG,
-                                  (old_val & ~RES_XYZ_MASK) |
-                                  (res_xyz << RES_XYZ_SHIFT) & RES_XYZ_MASK);
+                                 ((old_val & ~RES_XYZ_MASK) |
+                                  (res_xyz << RES_XYZ_SHIFT)) & RES_XYZ_MASK);
   return checkStatus(status1) | checkStatus(status2);
 }
 
